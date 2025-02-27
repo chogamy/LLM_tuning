@@ -1,1 +1,1 @@
-deepspeed main.py
+deepspeed main.py --model_name LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct

@@ -1,3 +1,4 @@
+import argparse
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -15,23 +16,24 @@ from datasets import load_dataset
 # TODO: inference
 # TODO: safetensor
 
-if __name__ == "__main__":
-    # https://medium.com/@yxinli92/fine-tuning-large-language-models-with-deepspeed-a-step-by-step-guide-2fa6ce27f68a
+# ref: https://medium.com/@yxinli92/fine-tuning-large-language-models-with-deepspeed-a-step-by-step-guide-2fa6ce27f68a
 
-    # model_name = "maywell/Synatra-42dot-1.3B"
-    model_name = "LGAI-EXAONE/EXAONE-3.5-2.4B-Instruct"
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", type=str)
+    parser.add_argument("--local_rank", type=str)
+    args = parser.parse_args()
 
     model = AutoModelForCausalLM.from_pretrained(
-        model_name, torch_dtype=torch.float16, trust_remote_code=True
+        args.model_name, torch_dtype=torch.float16, trust_remote_code=True
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     ds_config = {
-        # "train_batch_size": 8,
         "train_micro_batch_size_per_gpu": 2,
         "gradient_accumulation_steps": 1,
         "fp16": {"enabled": True},
@@ -43,13 +45,15 @@ if __name__ == "__main__":
         },
     }
 
-    # Load dataset and tokenize
+    # if args.local_rank == 0:
+    # 가끔 huggingface_hub.errors.HfHubHTTPError: 429 Client Error: Too Many Requests for url: 에러가 나는데
+    # 로컬 랭크 때문에 여러변 로드해서인걸로 추측
+    # 테스트 데이터셋
     train_dataset = load_dataset("KorQuAD/squad_kor_v1", split="train[:100]")
     valid_dataset = load_dataset("KorQuAD/squad_kor_v1", split="validation[:10]")
 
     def tokenize_function(examples):
         inputs = []
-        labels = []
 
         for question, answer in zip(examples["question"], examples["answers"]):
             input_dict = tokenizer(
@@ -62,18 +66,7 @@ if __name__ == "__main__":
                 max_length=1024,
             )
 
-            # input_dict["input_ids"] = torch.LongTensor(input_dict["input_ids"])
-            # input_dict["attention_mask"] = torch.LongTensor(
-            #     input_dict["attention_mask"]
-            # )
-
             inputs.append(input_dict)
-
-            # label = input_dict["input_ids"]
-            # label = [l if l != tokenizer.pad_token_id else -100 for l in label]
-            # label = label[1:] + [-100]
-            # label = torch.LongTensor(label)
-            # labels.append(label)
 
         return {
             "input_ids": [input["input_ids"] for input in inputs],
