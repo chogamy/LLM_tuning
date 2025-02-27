@@ -56,11 +56,19 @@ if __name__ == "__main__":
         inputs = []
 
         for question, answer in zip(examples["question"], examples["answers"]):
+
+            messages = [
+                {"role": "user", "content": question},
+                {
+                    "role": "assistant",
+                    "content": answer["text"][0],
+                },
+            ]
+
+            formatted_text = tokenizer.apply_chat_template(messages, tokenize=False)
+
             input_dict = tokenizer(
-                f"""
-사용자: {question}
-답변: {answer['text']}
-""",
+                formatted_text,
                 padding="max_length",
                 truncation=True,
                 max_length=1024,
